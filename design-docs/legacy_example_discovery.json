@@ -1,0 +1,10 @@
+{
+    "FriendlyName": "HDHomeRun DUAL",
+    "ModelNumber": "HDHR3-US",
+    "Legacy": 1,
+    "FirmwareName": "hdhomerun3_atsc",
+    "FirmwareVersion": "20161117",
+    "DeviceID": "FFFFFFFF",
+    "TunerCount": 2,
+    "BaseURL": "http://192.168.0.100:80"
+}
