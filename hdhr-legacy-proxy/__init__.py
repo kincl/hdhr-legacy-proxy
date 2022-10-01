@@ -115,7 +115,7 @@ def stream(channel, program):
         yield bytes()
         # print(f"data: {data}")
         while True:
-            data, addr = sock.recvfrom(1500)
+            data, addr = sock.recvfrom(1316)
             # print(f"received from {addr[0]}:{addr[1]}")
             yield data
     return Response(generate(), content_type="video/mpeg", direct_passthrough=True)
