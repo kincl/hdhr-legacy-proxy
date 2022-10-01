@@ -106,7 +106,7 @@ def stream(channel, program):
     time.sleep(2)
 
     _, status = dev.get_tuner_status()
-    app.logger.info(f"tuner status: {status}")
+    app.logger.info(f"tuner status: {status.decode('ascii')}")
     # app.logger.info(f"stream info: {dev.get_tuner_streaminfo()}")
     
     # TODO check that tuner is set
