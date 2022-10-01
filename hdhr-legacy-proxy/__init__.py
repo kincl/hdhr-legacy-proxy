@@ -1,19 +1,44 @@
 from gevent import monkey, socket
 monkey.patch_all() # we need to patch very early
 
+import os
+import sys
+import time
 import pickle
+import logging
+
 from flask import Flask, jsonify, Response
+from hdhr.adapter import HdhrUtility, HdhrDeviceQuery, ip_int_to_ascii, ascii_str
 
-from hdhr.adapter import HdhrUtility, HdhrDeviceQuery
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(("0.0.0.0", 5000))
 app = Flask(__name__)
+application = app
+
+handler = app.logger.handlers[0]
+formatter = logging.Formatter('[%(asctime)s] [%(process)d] [%(levelname)s] [%(name)s] %(message)s', "%Y-%m-%d %H:%M:%S %z")
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
+app.logger.setLevel(logging.INFO)
+
+devices = HdhrUtility.discover_find_devices_custom()
+if len(devices) == 1:
+    device = devices[0]
+    app.logger.info(f"found device: [{device.nice_device_id}] {device.nice_ip}")
+else:
+    app.logger.error("error finding a device")
+    sys.exit(1)
 
 config = {
-    "host": "http://192.168.5.111:8000",
+    "proxy_host": os.environ.get("HDHR_LEGACY_PROXY_HOST") or "",
+    "proxy_port": os.environ.get("HDHR_LEGACY_PROXY_PORT") or "8000",
+    "proxy_tuner_port": os.environ.get("HDHR_LEGACY_PROXY_TUNER_PORT") or "5000",
     "tuners": 1
 }
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("0.0.0.0", int(config['proxy_tuner_port'])))
+app.logger.info(f"listening on UDP port :{config['proxy_tuner_port']}")
+
+proxy_url = f"http://{config['proxy_host']}:{config['proxy_port']}"
 
 discoverData = {
     "FriendlyName": "hdhrLegacyProxy",
@@ -23,8 +48,8 @@ discoverData = {
     "FirmwareVersion": "20150826",
     "DeviceID": "12345678",
     "DeviceAuth": "test1234",
-    "BaseURL": f"{config['host']}",
-    "LineupURL": f"{config['host']}/lineup.json"
+    "BaseURL": proxy_url,
+    "LineupURL": f"{proxy_url}/lineup.json"
 }
 
 @app.route("/discover.json")
@@ -50,7 +75,7 @@ def lineup():
         with open('channels.dat', 'rb+') as f:
             channels = pickle.load(f)
     except OSError:
-        print("No previous channels.dat found!")
+        app.logger.error("No previous channels.dat found!")
         return jsonify(lineup)
 
     for channel in channels:
@@ -60,7 +85,7 @@ def lineup():
             lineup.append({
                 "GuideNumber": program.program_str.decode('ascii').split(' ')[1],
                 "GuideName": program.name.decode('ascii'),
-                "URL": f"{config['host']}/auto/{channel.frequency}/{program.program_number}"
+                "URL": f"{proxy_url}/auto/{channel.frequency}/{program.program_number}"
             })
 
     return jsonify(lineup)
@@ -68,18 +93,23 @@ def lineup():
 
 @app.route('/auto/<channel>/<program>')
 def stream(channel, program):
+    app.logger.info(f"GET /auto/{channel}/{program} starting stream")
     # dir = os.getcwd()
     # os.system(f"/bin/bash -c {dir}/test_tv.sh")
 
-    devices = HdhrUtility.discover_find_devices_custom()
-
-    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(devices[0].nice_device_id))
+    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
     dev.set_tuner_channel(channel)
     dev.set_tuner_program(program)
-    dev.set_tuner_target("udp://192.168.5.111:5000")
+    dev.set_tuner_target(f"udp://{config['proxy_host']}:{config['proxy_tuner_port']}")
+
+    app.logger.info("waiting 2 seconds")
+    time.sleep(2)
+
+    _, status = dev.get_tuner_status()
+    app.logger.info(f"tuner status: {status}")
+    # app.logger.info(f"stream info: {dev.get_tuner_streaminfo()}")
     
-    # print(dev.get_tuner_status())
-    # print(dev.get_tuner_streaminfo())
+    # TODO check that tuner is set
 
     def generate():
         yield bytes()
@@ -93,8 +123,7 @@ def stream(channel, program):
 
 @app.route('/scan')
 def scan_channels():
-    devices = HdhrUtility.discover_find_devices_custom()
-    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(devices[0].nice_device_id))
+    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
 
     try:
         with open('channels.dat', 'rb+') as f:
