@@ -1,9 +1,10 @@
 from gevent import monkey, socket
 monkey.patch_all() # we need to patch very early
 
-import os
+import pickle
 from flask import Flask, jsonify, Response
 
+from hdhr.adapter import HdhrUtility, HdhrDeviceQuery
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("0.0.0.0", 5000))
@@ -45,27 +46,41 @@ def status():
 def lineup():
     lineup = []
 
-    # for c in _get_channels():
-    #       c = c['channel']
-    #       url = '%s/auto/v%s' % (config['npvrProxyURL'], c['channelNum'])
+    try:
+        with open('channels.dat', 'rb+') as f:
+            channels = pickle.load(f)
+    except OSError:
+        print("No previous channels.dat found!")
+        return jsonify(lineup)
 
-    #       lineup.append({'GuideNumber': str(c['channelNum']),
-    #                      'GuideName': c['channelName'],
-    #                      'URL': url
-    #                      })
-
-    lineup.append({
-        "GuideNumber": "1",
-        "GuideName": "TEST",
-        "URL": f"{config['host']}/auto/v1"
-    })
+    for channel in channels:
+        for program in channel.programs:
+            if len(program.program_str) == 0:
+                continue
+            lineup.append({
+                "GuideNumber": program.program_str.decode('ascii').split(' ')[1],
+                "GuideName": program.name.decode('ascii'),
+                "URL": f"{config['host']}/auto/{channel.frequency}/{program.program_number}"
+            })
 
     return jsonify(lineup)
 
-@app.route('/auto/<channel>')
-def stream(channel):
-    dir = os.getcwd()
-    os.system(f"/bin/bash -c {dir}/test_tv.sh")
+
+@app.route('/auto/<channel>/<program>')
+def stream(channel, program):
+    # dir = os.getcwd()
+    # os.system(f"/bin/bash -c {dir}/test_tv.sh")
+
+    devices = HdhrUtility.discover_find_devices_custom()
+
+    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(devices[0].nice_device_id))
+    dev.set_tuner_channel(channel)
+    dev.set_tuner_program(program)
+    dev.set_tuner_target("udp://192.168.5.111:5000")
+    
+    # print(dev.get_tuner_status())
+    # print(dev.get_tuner_streaminfo())
+
     def generate():
         yield bytes()
         # print(f"data: {data}")
@@ -74,3 +89,21 @@ def stream(channel):
             # print(f"received from {addr[0]}:{addr[1]}")
             yield data
     return Response(generate(), content_type="video/mpeg", direct_passthrough=True)
+
+
+@app.route('/scan')
+def scan_channels():
+    devices = HdhrUtility.discover_find_devices_custom()
+    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(devices[0].nice_device_id))
+
+    try:
+        with open('channels.dat', 'rb+') as f:
+            channels = pickle.load(f)
+    except OSError:
+        print("No previous channels.dat found!")
+        channels = dev.scan_channels(bytes('us-bcast', 'utf-8'))
+        print("Writing new channels.dat")
+        with open('channels.dat', 'wb') as f:
+            pickle.dump(channels, f)
+
+    return len(channels)
