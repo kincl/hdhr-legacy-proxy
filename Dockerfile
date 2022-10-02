@@ -1,11 +1,11 @@
-FROM python:latest as build
+FROM docker.io/library/python:latest as build
 
 WORKDIR /tmp
 RUN git clone https://github.com/Silicondust/libhdhomerun.git && \
     cd libhdhomerun && \
     make
 
-FROM python:latest 
+FROM docker.io/library/python:latest
 
 RUN git clone https://github.com/kincl/hdhr-legacy-proxy.git
 

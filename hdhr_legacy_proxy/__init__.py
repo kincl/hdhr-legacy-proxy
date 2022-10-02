@@ -33,8 +33,11 @@ config = {
     "proxy_host": os.environ.get("HDHR_LEGACY_PROXY_HOST") or "",
     "proxy_port": os.environ.get("HDHR_LEGACY_PROXY_PORT") or "8000",
     "proxy_tuner_port": os.environ.get("HDHR_LEGACY_PROXY_TUNER_PORT") or "5000",
-    "tuners": 1
+    "tuners": 1,
+    "state_dir": os.environ.get("HDHR_LEGACY_PROXY_STATE_DIR") or ""
 }
+
+channel_state_path = os.path.join(config["state_dir"], "channels.pkl")
 
 def do_scan(as_bytes=True):
     dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
@@ -52,16 +55,16 @@ def do_scan(as_bytes=True):
             channels.append(channel[3])
     yield format_msg("Completed channel scan", as_bytes)
 
-    app.logger.info("Writing new channels.pkl")
-    with open('channels.pkl', 'wb') as f:
+    app.logger.info(f"Writing new {channel_state_path}")
+    with open(channel_state_path, 'wb') as f:
         pickle.dump(channels, f)
 
 try:
-    with open('channels.pkl', 'rb+') as f:
+    with open(channel_state_path, 'rb+') as f:
         pickle.load(f)
-        app.logger.info("Using previous channels.pkl")
+        app.logger.info(f"Using previous {channel_state_path}")
 except OSError:
-    app.logger.info("No previous channels.pkl found!")
+    app.logger.info(f"No previous {channel_state_path} found!")
     for channel in do_scan(as_bytes=False):
         app.logger.info(channel)
 
@@ -103,10 +106,10 @@ def lineup():
     lineup = []
 
     try:
-        with open('channels.pkl', 'rb+') as f:
+        with open(channel_state_path, 'rb+') as f:
             channels = pickle.load(f)
     except OSError:
-        app.logger.error("No previous channels.pkl found!")
+        app.logger.error(f"No previous {channel_state_path} found!")
         return jsonify(lineup)
 
     for channel in channels:
@@ -157,9 +160,9 @@ def scan_channels():
     app.logger.info("Scanning channels")
 
     try:
-        with open('channels.pkl', 'rb+') as f:
+        with open(channel_state_path, 'rb+') as f:
             channels = pickle.load(f)
             return len(channels)
     except OSError:
-        app.logger.info("No previous channels.pkl found!")
+        app.logger.info(f"No previous {channel_state_path} found!")
         return Response(do_scan(), content_type="text/plain", direct_passthrough=True)
