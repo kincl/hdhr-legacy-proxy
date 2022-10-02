@@ -8,7 +8,9 @@ import pickle
 import logging
 
 from flask import Flask, jsonify, Response
-from hdhr.adapter import HdhrUtility, HdhrDeviceQuery, ip_int_to_ascii, ascii_str
+from hdhr.adapter import HdhrUtility, HdhrDeviceQuery
+
+from hdhr_legacy_proxy.util import format_msg
 
 app = Flask(__name__)
 application = app
@@ -33,6 +35,34 @@ config = {
     "proxy_tuner_port": os.environ.get("HDHR_LEGACY_PROXY_TUNER_PORT") or "5000",
     "tuners": 1
 }
+
+def do_scan(as_bytes=True):
+    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
+
+    yield format_msg("Starting channel scan", as_bytes)
+    channels = []
+    scanner = dev.scan_channels(bytes('us-bcast', 'utf-8'))
+    for channel in scanner:
+        if channel[0]:
+            programs = [channel[3].programs[i].program_str.decode('ascii') for i in range(channel[3].program_count)]
+            yield format_msg(f"Found channel {channel[1] + 1}/{channel[2] + 1}: {', '.join(programs)}", as_bytes)
+        else:
+            yield format_msg(f"Scanned channel {channel[1] + 1}/{channel[2] + 1}", as_bytes)
+        if channel[0] == True:
+            channels.append(channel[3])
+    yield format_msg("Completed channel scan", as_bytes)
+
+    app.logger.info("Writing new channels.pkl")
+    with open('channels.pkl', 'wb') as f:
+        pickle.dump(channels, f)
+
+try:
+    with open('channels.pkl', 'r+') as f:
+        pickle.load(f)
+except OSError:
+    app.logger.info("No previous channels.pkl found!")
+    for channel in do_scan(as_bytes=False):
+        app.logger.info(channel)
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("0.0.0.0", int(config['proxy_tuner_port'])))
@@ -72,10 +102,10 @@ def lineup():
     lineup = []
 
     try:
-        with open('channels.dat', 'rb+') as f:
+        with open('channels.pkl', 'rb+') as f:
             channels = pickle.load(f)
     except OSError:
-        app.logger.error("No previous channels.dat found!")
+        app.logger.error("No previous channels.pkl found!")
         return jsonify(lineup)
 
     for channel in channels:
@@ -126,25 +156,9 @@ def scan_channels():
     app.logger.info("Scanning channels")
 
     try:
-        with open('channels.dat', 'rb+') as f:
+        with open('channels.pkl', 'r+') as f:
             channels = pickle.load(f)
             return len(channels)
     except OSError:
-        app.logger.info("No previous channels.dat found!")
+        app.logger.info("No previous channels.pkl found!")
         return Response(do_scan(), content_type="text/plain", direct_passthrough=True)
-
-def do_scan():
-    dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
-
-    yield bytes()
-    channels = []
-    scanner = dev.scan_channels(bytes('us-bcast', 'utf-8'))
-    for channel in scanner:
-        yield bytes(f"Scanned channel {channel}\n", "utf-8")
-        if channel[0] == True:
-            channels.append(channel[3])
-    yield bytes("Completed channel scan", "utf-8")
-
-    app.logger.info("Writing new channels.dat")
-    with open('channels.dat', 'wb') as f:
-        pickle.dump(channels, f)
