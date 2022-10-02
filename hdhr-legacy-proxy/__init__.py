@@ -123,16 +123,26 @@ def stream(channel, program):
 
 @app.route('/scan')
 def scan_channels():
+    app.logger.info("Scanning channels")
     dev = HdhrDeviceQuery(HdhrUtility.device_create_from_str(device.nice_device_id))
 
     try:
         with open('channels.dat', 'rb+') as f:
             channels = pickle.load(f)
+            return len(channels)
     except OSError:
-        print("No previous channels.dat found!")
-        channels = dev.scan_channels(bytes('us-bcast', 'utf-8'))
-        print("Writing new channels.dat")
-        with open('channels.dat', 'wb') as f:
-            pickle.dump(channels, f)
+        app.logger.info("No previous channels.dat found!")
 
-    return len(channels)
+        def do_scan():
+            yield bytes()
+            channels = []
+            scanner = dev.scan_channels(bytes('us-bcast', 'utf-8'))
+            for channel in scanner:
+                yield bytes(f"Scanned channel {channel}\n", "utf-8")
+                if channel[0] == True:
+                    channels.append(channel[3])
+
+            app.logger.info("Writing new channels.dat")
+            with open('channels.dat', 'wb') as f:
+                pickle.dump(channels, f)
+        return Response(do_scan(), content_type="text/plain", direct_passthrough=True)
