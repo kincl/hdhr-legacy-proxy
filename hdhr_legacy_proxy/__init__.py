@@ -57,8 +57,9 @@ def do_scan(as_bytes=True):
         pickle.dump(channels, f)
 
 try:
-    with open('channels.pkl', 'r+') as f:
+    with open('channels.pkl', 'rb+') as f:
         pickle.load(f)
+        app.logger.info("Using previous channels.pkl")
 except OSError:
     app.logger.info("No previous channels.pkl found!")
     for channel in do_scan(as_bytes=False):
@@ -156,7 +157,7 @@ def scan_channels():
     app.logger.info("Scanning channels")
 
     try:
-        with open('channels.pkl', 'r+') as f:
+        with open('channels.pkl', 'rb+') as f:
             channels = pickle.load(f)
             return len(channels)
     except OSError:
