@@ -154,7 +154,6 @@ def stream(channel, program):
             yield data
     return Response(generate(), content_type="video/mpeg", direct_passthrough=True)
 
-
 @app.route('/scan')
 def scan_channels():
     app.logger.info("Scanning channels")
