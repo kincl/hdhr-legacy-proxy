@@ -4,7 +4,7 @@
 echo "trying Channel 34 Program 1"
 CHANNEL=34
 PROGRAM=1
-UDP_PORT=5000
+UDP_PORT=6000
 TUNER=0
 
 # device id of homerun
