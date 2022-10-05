@@ -8,8 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"os"
-	"os/exec"
 	"strconv"
 	"unsafe"
 )
@@ -34,6 +32,7 @@ func main() {
 	ptr := C.malloc(C.sizeof_struct_hdhomerun_discover_device_t)
 	defer C.free(unsafe.Pointer(ptr))
 
+discover:
 	numFound := C.hdhomerun_discover_find_devices_custom_v2(
 		C.uint(0),
 		C.uint(wildcard),
@@ -42,11 +41,12 @@ func main() {
 		1)
 
 	if numFound == 0 {
-		fmt.Println("Did not find any devices! Exiting")
-		os.Exit(1)
+		fmt.Println("Did not find any devices!")
+		goto discover
 	}
-	device := (*C.struct_hdhomerun_discover_device_t)(ptr)
-	fmt.Printf("Found %d HDHR device: %X %s\n", numFound, device.device_id, inet_ntoa((uint32)(device.ip_addr)))
+	discovered := (*C.struct_hdhomerun_discover_device_t)(ptr)
+	fmt.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
+	device := C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
@@ -63,6 +63,7 @@ func main() {
 		}
 		defer conn.Close()
 		rconn := bufio.NewReader(conn)
+		fmt.Println("Connection opened, listening on UDP :6000")
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -70,12 +71,25 @@ func main() {
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 
-		fmt.Println("Connection opened, listening on UDP :6000")
+		channel := C.CString("auto:34")
+		channel_ok := C.hdhomerun_device_set_tuner_channel(device, channel)
+		C.free(unsafe.Pointer(channel))
+		if channel_ok == 0 {
+			fmt.Println("Unable to set tuner channel!")
+		}
 
-		cmd := exec.Command("/bin/bash", "test_tv.sh") // TODO
-		e := cmd.Run()
-		if e != nil {
-			fmt.Println("error running:", e.Error())
+		program := C.CString("1")
+		program_ok := C.hdhomerun_device_set_tuner_program(device, program)
+		C.free(unsafe.Pointer(program))
+		if program_ok == 0 {
+			fmt.Println("Unable to set tuner program!")
+		}
+
+		target := C.CString("udp://192.168.5.111:6000")
+		target_ok := C.hdhomerun_device_set_tuner_target(device, target)
+		C.free(unsafe.Pointer(target))
+		if target_ok == 0 {
+			fmt.Println("Unable to set tuner target!")
 		}
 
 		for {
