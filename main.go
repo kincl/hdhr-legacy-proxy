@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"time"
 	"unsafe"
 )
 
@@ -33,18 +34,20 @@ func main() {
 	defer C.free(unsafe.Pointer(ptr))
 
 discover:
+	discovered := (*C.struct_hdhomerun_discover_device_t)(ptr)
 	numFound := C.hdhomerun_discover_find_devices_custom_v2(
 		C.uint(0),
 		C.uint(wildcard),
 		C.uint(wildcard),
-		(*C.struct_hdhomerun_discover_device_t)(ptr),
+		discovered,
 		1)
 
 	if numFound == 0 {
-		fmt.Println("Did not find any devices!")
+		fmt.Println("Did not find any devices! Sleeping for 1s...")
+		time.Sleep(time.Second * 1)
 		goto discover
 	}
-	discovered := (*C.struct_hdhomerun_discover_device_t)(ptr)
+
 	fmt.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
 	device := C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
 
@@ -71,14 +74,14 @@ discover:
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 
-		channel := C.CString("auto:34")
+		channel := C.CString("auto:29")
 		channel_ok := C.hdhomerun_device_set_tuner_channel(device, channel)
 		C.free(unsafe.Pointer(channel))
 		if channel_ok == 0 {
 			fmt.Println("Unable to set tuner channel!")
 		}
 
-		program := C.CString("1")
+		program := C.CString("3")
 		program_ok := C.hdhomerun_device_set_tuner_program(device, program)
 		C.free(unsafe.Pointer(program))
 		if program_ok == 0 {
