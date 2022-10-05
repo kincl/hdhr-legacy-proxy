@@ -3,6 +3,8 @@
 This is a proxy that will make a HDHR legacy (HDHR Dual, HDHR 3) act like a newer version
 in order to work with Plex Media Center
 
+![diagram](design-docs/hdhr-legacy-proxy.jpg)
+
 ## Install
 
 Compile libhdhomerun:
@@ -13,9 +15,6 @@ cd libhdhomerun
 make
 ```
 
-Download this package and deps
-
 ```
-pip install -r requirements.txt
-pip install git+https://github.com/kincl/hdhr.git
+go build main.go
 ```
