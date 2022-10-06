@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hdhr-legacy-proxy
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: hdhr-legacy-proxy
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: hdhr-legacy-proxy
+    spec:
+      enableServiceLinks: false
+      hostNetwork: true
+      containers:
+        - name: hdhr-legacy-proxy
+          image: ghcr.io/kincl/hdhr-legacy-proxy:latest
+          env:
+            - name: HDHR_LEGACY_PROXY_HOST
+              value: CHANGEME
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: hdhr-legacy-proxy
+spec:
+  type: LoadBalancer
+  selector:
+    app: hdhr-legacy-proxy
+  loadBalancerIP: CHANGEME
+  externalTrafficPolicy: Local
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+    - name: video
+      protocol: TCP
+      port: 6000
+      targetPort: 6000
