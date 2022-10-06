@@ -177,7 +177,11 @@ func (proxy *Proxy) scan(w http.ResponseWriter, r *http.Request, ps httprouter.P
 				proxy.listings = append(proxy.listings, Listing{
 					GuideNumber: C.GoString(&result.programs[j].program_str[0]),
 					GuideName:   C.GoString(&result.programs[j].name[0]),
-					URL:         fmt.Sprintf("http://%s:%s/auto/%d/%d", proxy.hostname, proxy.port, result.frequency, (int)(result.programs[j].program_number)),
+					URL: fmt.Sprintf("http://%s:%s/auto/%d/%d",
+						proxy.hostname,
+						proxy.port,
+						result.frequency,
+						(int)(result.programs[j].program_number)),
 				})
 			}
 		}
@@ -218,6 +222,7 @@ func main() {
 		hostname:  "192.168.5.111",
 		port:      "8000",
 		tunerPort: "6000",
+		listings:  []Listing{},
 	}
 
 	router := httprouter.New()
