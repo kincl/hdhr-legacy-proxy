@@ -17,8 +17,8 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-// #cgo CFLAGS: -I/Users/jasonkincl/Workspace/libhdhomerun
-// #cgo LDFLAGS: -lpthread -L/Users/jasonkincl/Workspace/libhdhomerun -lhdhomerun
+// #cgo CFLAGS: -Ilibhdhomerun
+// #cgo LDFLAGS: -lpthread -Llibhdhomerun -lhdhomerun
 // #include <stdio.h>
 // #include <stdbool.h>
 // #include <stdint.h>
