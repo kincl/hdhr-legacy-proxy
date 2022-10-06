@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -187,6 +188,16 @@ func (proxy *Proxy) scan(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	w.Write([]byte(fmt.Sprintf("listings found: %d\n", len(proxy.listings))))
 }
 
+func getEnv(key string, def string) string {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		log.Printf("%s not set, using default %s\n", key, def)
+		return def
+	} else {
+		return val
+	}
+}
+
 func main() {
 	wildcard, _ := strconv.ParseInt("0xFFFFFFFF", 0, 64)
 	ptr := C.malloc(C.sizeof_struct_hdhomerun_discover_device_t)
@@ -217,9 +228,9 @@ func main() {
 
 	proxy := Proxy{
 		device:    device,
-		hostname:  "192.168.5.111",
-		port:      "8000",
-		tunerPort: "6000",
+		hostname:  getEnv("HDHR_LEGACY_PROXY_HOST", "127.0.0.1"),
+		port:      getEnv("HDHR_LEGACY_PROXY_PORT", "8000"),
+		tunerPort: getEnv("HDHR_LEGACY_PROXY_TUNER_PORT", "6000"),
 		listings:  []Listing{},
 	}
 
