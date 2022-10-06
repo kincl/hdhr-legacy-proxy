@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -151,9 +152,6 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 }
 
 func (proxy *Proxy) scan(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	// ptr := C.malloc(C.sizeof_struct_hdhomerun_channelscan_t)
-	// defer C.free(unsafe.Pointer(ptr))
-
 	channelList := C.hdhomerun_channel_list_create(C.CString("us-bcast"))
 	totalNum := (int)(C.hdhomerun_channel_list_total_count(channelList))
 
@@ -175,7 +173,7 @@ func (proxy *Proxy) scan(w http.ResponseWriter, r *http.Request, ps httprouter.P
 			log.Printf("Found %s\n", C.GoString(&result.channel_str[0]))
 			for j := 0; j < int(result.program_count); j++ {
 				proxy.listings = append(proxy.listings, Listing{
-					GuideNumber: C.GoString(&result.programs[j].program_str[0]),
+					GuideNumber: strings.Split(C.GoString(&result.programs[j].program_str[0]), " ")[1],
 					GuideName:   C.GoString(&result.programs[j].name[0]),
 					URL: fmt.Sprintf("http://%s:%s/auto/%d/%d",
 						proxy.hostname,
