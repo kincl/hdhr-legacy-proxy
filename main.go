@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -34,7 +35,50 @@ type Proxy struct {
 	device *C.struct_hdhomerun_device_t
 }
 
-func (proxy *Proxy) handle_main(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (proxy *Proxy) discover(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	discover := struct {
+		FriendlyName    string
+		ModelNumber     string
+		FirmwareName    string
+		TunerCount      int
+		FirmwareVersion string
+		DeviceID        string
+		DeviceAuth      string
+		BaseURL         string
+		LineupURL       string
+	}{
+		FriendlyName:    "hdhrLegacyProxy",
+		ModelNumber:     "HDTC-2US",
+		FirmwareName:    "hdhomeruntc_atsc",
+		TunerCount:      1,
+		FirmwareVersion: "20150826",
+		DeviceID:        "12345678",
+		DeviceAuth:      "test1234",
+		BaseURL:         "proxy_url",
+		LineupURL:       "{proxy_url}/lineup.json",
+	}
+	json.NewEncoder(w).Encode(discover)
+}
+
+func (proxy *Proxy) lineupStatus(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	status := struct {
+		ScanInProgress int
+		ScanPossible   int
+		Source         string
+		SourceList     []string
+	}{
+		ScanInProgress: 0,
+		ScanPossible:   1,
+		Source:         "Antenna",
+		SourceList:     []string{"Antenna"},
+	}
+	json.NewEncoder(w).Encode(status)
+}
+
+func (proxy *Proxy) lineup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+}
+
+func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 
 	addr := net.UDPAddr{
@@ -98,19 +142,24 @@ func main() {
 	ptr := C.malloc(C.sizeof_struct_hdhomerun_discover_device_t)
 	defer C.free(unsafe.Pointer(ptr))
 
-discover:
-	discovered := (*C.struct_hdhomerun_discover_device_t)(ptr)
-	numFound := C.hdhomerun_discover_find_devices_custom_v2(
-		C.uint(0),
-		C.uint(wildcard),
-		C.uint(wildcard),
-		discovered,
-		1)
+	var discovered *C.struct_hdhomerun_discover_device_t
+	var numFound C.int
 
-	if numFound == 0 {
+	for {
+		discovered = (*C.struct_hdhomerun_discover_device_t)(ptr)
+		numFound = C.hdhomerun_discover_find_devices_custom_v2(
+			C.uint(0),
+			C.uint(wildcard),
+			C.uint(wildcard),
+			discovered,
+			1)
+
+		if numFound != 0 {
+			break
+		}
+
 		fmt.Println("Did not find any devices! Trying again in 1s...")
 		time.Sleep(time.Second * 1)
-		goto discover
 	}
 
 	fmt.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
@@ -119,7 +168,10 @@ discover:
 	proxy := Proxy{device: device}
 
 	router := httprouter.New()
-	router.GET("/auto/:channel/:program", proxy.handle_main)
+	router.GET("/discover.json", proxy.discover)
+	router.GET("/lineup_status.json", proxy.lineupStatus)
+	router.GET("/lineup.json", proxy.lineup)
+	router.GET("/auto/:channel/:program", proxy.stream)
 
 	log.Print("Listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
