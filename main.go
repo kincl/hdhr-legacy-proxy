@@ -31,8 +31,19 @@ func inet_ntoa(ipInt64 uint32) (ip netip.Addr) {
 	return
 }
 
+type Listing struct {
+	GuideNumber string
+	GuideName   string
+	URL         string
+}
+
 type Proxy struct {
-	device *C.struct_hdhomerun_device_t
+	device    *C.struct_hdhomerun_device_t
+	hostname  string
+	port      string
+	tunerPort string
+
+	listings []Listing
 }
 
 func (proxy *Proxy) discover(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -54,8 +65,8 @@ func (proxy *Proxy) discover(w http.ResponseWriter, r *http.Request, ps httprout
 		FirmwareVersion: "20150826",
 		DeviceID:        "12345678",
 		DeviceAuth:      "test1234",
-		BaseURL:         "proxy_url",
-		LineupURL:       "{proxy_url}/lineup.json",
+		BaseURL:         fmt.Sprintf("http://%s:%s", proxy.hostname, proxy.port),
+		LineupURL:       fmt.Sprintf("http://%s:%s/lineup.json", proxy.hostname, proxy.port),
 	}
 	json.NewEncoder(w).Encode(discover)
 }
@@ -76,24 +87,26 @@ func (proxy *Proxy) lineupStatus(w http.ResponseWriter, r *http.Request, ps http
 }
 
 func (proxy *Proxy) lineup(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	json.NewEncoder(w).Encode(proxy.listings)
 }
 
 func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 
+	tunerPort, _ := strconv.Atoi(proxy.tunerPort)
 	addr := net.UDPAddr{
-		Port: 6000,
+		Port: tunerPort,
 		IP:   net.ParseIP("0.0.0.0"),
 	}
 	conn, err := net.ListenUDP("udp", &addr)
 	if err != nil {
-		fmt.Println("Error listening:", err.Error())
+		log.Println("Error listening:", err.Error())
 		http.Error(w, "Unable to allocate port", http.StatusFailedDependency)
 		return
 	}
 	defer conn.Close()
 	rconn := bufio.NewReader(conn)
-	fmt.Println("Connection opened, listening on UDP :6000")
+	log.Printf("Connection opened, listening on UDP :%s\n", proxy.tunerPort)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -105,36 +118,71 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 	channel_ok := C.hdhomerun_device_set_tuner_channel(proxy.device, channel)
 	C.free(unsafe.Pointer(channel))
 	if channel_ok == 0 {
-		fmt.Println("Unable to set tuner channel!")
+		log.Println("Unable to set tuner channel!")
 	}
 
 	program := C.CString(ps.ByName("program"))
 	program_ok := C.hdhomerun_device_set_tuner_program(proxy.device, program)
 	C.free(unsafe.Pointer(program))
 	if program_ok == 0 {
-		fmt.Println("Unable to set tuner program!")
+		log.Println("Unable to set tuner program!")
 	}
 
-	target := C.CString("udp://192.168.5.111:6000")
+	target := C.CString(fmt.Sprintf("udp://%s:%s", proxy.hostname, proxy.tunerPort))
 	target_ok := C.hdhomerun_device_set_tuner_target(proxy.device, target)
 	C.free(unsafe.Pointer(target))
 	if target_ok == 0 {
-		fmt.Println("Unable to set tuner target!")
+		log.Println("Unable to set tuner target!")
 	}
 
 	for {
 		select {
 		case <-r.Context().Done():
-			fmt.Println("Connection closed, releasing UDP :6000")
+			log.Printf("Connection closed, releasing UDP :%s\n", proxy.tunerPort)
 			return
 		default:
 			if err != nil {
-				fmt.Println("error reading from UDP:", err.Error())
+				log.Println("error reading from UDP:", err.Error())
 			}
 			io.CopyN(w, rconn, 1500)
 			flusher.Flush() // Trigger "chunked" encoding and send a chunk
 		}
 	}
+}
+
+func (proxy *Proxy) scan(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	// ptr := C.malloc(C.sizeof_struct_hdhomerun_channelscan_t)
+	// defer C.free(unsafe.Pointer(ptr))
+
+	channelList := C.hdhomerun_channel_list_create(C.CString("us-bcast"))
+	totalNum := (int)(C.hdhomerun_channel_list_total_count(channelList))
+
+	channelScan := C.channelscan_create(proxy.device, C.CString("us-bcast"))
+
+	for i := 0; i <= totalNum; i++ {
+		log.Printf("scanning %d/%d", i+1, totalNum+1)
+		ptr := C.malloc(C.sizeof_struct_hdhomerun_channelscan_result_t)
+		defer C.free(unsafe.Pointer(ptr))
+		result := (*C.struct_hdhomerun_channelscan_result_t)(ptr)
+
+		advanceOK := C.channelscan_advance(channelScan, result)
+		if advanceOK != 1 {
+			break
+		}
+
+		detectOK := C.channelscan_detect(channelScan, result)
+		if detectOK == 1 && result.program_count > 0 {
+			log.Printf("Found %s\n", C.GoString(&result.channel_str[0]))
+			for j := 0; j < int(result.program_count); j++ {
+				proxy.listings = append(proxy.listings, Listing{
+					GuideNumber: C.GoString(&result.programs[j].program_str[0]),
+					GuideName:   C.GoString(&result.programs[j].name[0]),
+					URL:         fmt.Sprintf("http://%s:%s/auto/%d/%d", proxy.hostname, proxy.port, result.frequency, (int)(result.programs[j].program_number)),
+				})
+			}
+		}
+	}
+	w.Write([]byte(fmt.Sprintf("listings found: %d\n", len(proxy.listings))))
 }
 
 func main() {
@@ -158,21 +206,27 @@ func main() {
 			break
 		}
 
-		fmt.Println("Did not find any devices! Trying again in 1s...")
+		log.Println("Did not find any devices! Trying again in 1s...")
 		time.Sleep(time.Second * 1)
 	}
 
-	fmt.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
+	log.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
 	device := C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
 
-	proxy := Proxy{device: device}
+	proxy := Proxy{
+		device:    device,
+		hostname:  "192.168.5.111",
+		port:      "8000",
+		tunerPort: "6000",
+	}
 
 	router := httprouter.New()
 	router.GET("/discover.json", proxy.discover)
 	router.GET("/lineup_status.json", proxy.lineupStatus)
 	router.GET("/lineup.json", proxy.lineup)
 	router.GET("/auto/:channel/:program", proxy.stream)
+	router.GET("/scan", proxy.scan)
 
-	log.Print("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	log.Printf("Listening on :%s\n", proxy.port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", proxy.port), router))
 }
