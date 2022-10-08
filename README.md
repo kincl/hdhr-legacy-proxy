@@ -19,6 +19,14 @@ Environment Options
 | HDHR_LEGACY_PROXY_PORT | Port the proxy listens on for connections from Plex | 8000 |
 | HDHR_LEGACY_PROXY_TUNER_PORT | UDP port the proxy listens on for connections from the HDHR tuner | 6000 |
 
+### Channel Scan
+
+Access `http://${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}/scan to do a channel scan and put the results in memory
+
+### Plex
+
+Manually specify the tuner in the settings as ${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}
+
 ## TODO
 
 - Default to using own IP for proxy host variable
@@ -27,3 +35,5 @@ Environment Options
   - https://github.com/jackc/puddle/blob/master/pool.go
   - https://info.hdhomerun.com/info/http_api#specifying_a_tuner
 - Document how to use with Docker and Kubernetes
+- Set up default web page on proxy at / describing what is going on
+- Implement channel scan results storage
