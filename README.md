@@ -5,16 +5,16 @@ in order to work with Plex Media Center
 
 ![diagram](design-docs/hdhr-legacy-proxy.jpg)
 
-## Install
-
-Compile libhdhomerun:
+## Use
 
 ```
-git clone https://github.com/Silicondust/libhdhomerun
-cd libhdhomerun
-make
+docker run -it -p 8000:8000/tcp -p 6000:6000/udp ghcr.io/kincl/hdhr-legacy-proxy:latest
 ```
 
-```
-go build main.go
-```
+## TODO
+
+- Option for manually specifying device and not doing autodiscovery
+- Implement multiple tuners with a pool of resources
+  - https://github.com/jackc/puddle/blob/master/pool.go
+  - https://info.hdhomerun.com/info/http_api#specifying_a_tuner
+- Document how to use with Docker and Kubernetes
