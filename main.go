@@ -101,6 +101,8 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 		IP:   net.ParseIP("0.0.0.0"),
 	}
 	conn, err := net.ListenUDP("udp", &addr)
+	deadline := time.Now().Add(5 * time.Second)
+	conn.SetReadDeadline(deadline)
 	if err != nil {
 		log.Println("Error listening:", err.Error())
 		http.Error(w, "Unable to allocate port", http.StatusFailedDependency)
@@ -143,10 +145,12 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 			log.Printf("Connection closed, releasing UDP :%s\n", proxy.tunerPort)
 			return
 		default:
+			_, err := io.CopyN(w, rconn, 1500)
 			if err != nil {
 				log.Println("error reading from UDP:", err.Error())
+				return
 			}
-			io.CopyN(w, rconn, 1500)
+			conn.SetReadDeadline(time.Time{})
 			flusher.Flush() // Trigger "chunked" encoding and send a chunk
 		}
 	}
@@ -241,6 +245,6 @@ func main() {
 	router.GET("/auto/:channel/:program", proxy.stream)
 	router.GET("/scan", proxy.scan)
 
-	log.Printf("Listening on :%s\n", proxy.port)
+	log.Printf("Listening on %s:%s\n", proxy.hostname, proxy.port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", proxy.port), router))
 }
