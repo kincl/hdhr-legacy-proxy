@@ -21,11 +21,11 @@ Environment Options
 
 ### Channel Scan
 
-Access `http://${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}/scan to do a channel scan and put the results in memory
+Access `http://${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}/scan` to do a channel scan and put the results in memory
 
 ### Plex
 
-Manually specify the tuner in the settings as ${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}
+Manually specify the tuner in the settings as `${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}`
 
 ## TODO
 
