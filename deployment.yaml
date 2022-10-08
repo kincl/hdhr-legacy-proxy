@@ -22,7 +22,7 @@ spec:
           image: ghcr.io/kincl/hdhr-legacy-proxy:latest
           env:
             - name: HDHR_LEGACY_PROXY_HOST
-              value: CHANGEME
+              value: CHANGME
 ---
 kind: Service
 apiVersion: v1
@@ -32,7 +32,7 @@ spec:
   type: LoadBalancer
   selector:
     app: hdhr-legacy-proxy
-  loadBalancerIP: CHANGEME
+  loadBalancerIP: CHANGME
   externalTrafficPolicy: Local
   ports:
     - name: http
@@ -40,6 +40,6 @@ spec:
       port: 8000
       targetPort: 8000
     - name: video
-      protocol: TCP
+      protocol: UDP
       port: 6000
       targetPort: 6000
