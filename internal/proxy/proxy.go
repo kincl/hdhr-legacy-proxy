@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 	"unsafe"
@@ -50,6 +51,7 @@ type Proxy struct {
 	Hostname  string
 	Port      string
 	TunerPort string
+	DataDir   string
 
 	listings []Listing
 	channels []ChannelScan
@@ -63,19 +65,20 @@ func countPrograms(channels []ChannelScan) int {
 	return count
 }
 
-func NewProxy(hostname, port, tunerPort string) *Proxy {
+func NewProxy(hostname, port, tunerPort, dataDir string) *Proxy {
 	proxy := &Proxy{
 		Hostname:  hostname,
 		Port:      port,
 		TunerPort: tunerPort,
+		DataDir:   dataDir,
 	}
 
 	proxy.findDevices()
 
-	if _, err := os.Stat("channels.json"); err == nil {
-		log.Println("Parsing existing channels.json")
+	if _, err := os.Stat(filepath.Join(proxy.DataDir, "channels.json")); err == nil {
+		log.Printf("Parsing existing %s\n", filepath.Join(proxy.DataDir, "channels.json"))
 
-		file, err := os.Open("channels.json")
+		file, err := os.Open(filepath.Join(proxy.DataDir, "channels.json"))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -95,7 +98,7 @@ func NewProxy(hostname, port, tunerPort string) *Proxy {
 		proxy.channels = channels
 
 	} else if errors.Is(err, os.ErrNotExist) {
-		log.Println("No channels.json found, doing channel scan")
+		log.Printf("No %s found, doing channel scan\n", filepath.Join(proxy.DataDir, "channels.json"))
 		proxy.scan()
 
 	} else {
@@ -240,7 +243,7 @@ func (proxy *Proxy) scan() {
 	}
 	log.Printf("Total channels found: %d\n", countPrograms(proxy.channels))
 
-	file, err := os.Create("channels.json")
+	file, err := os.Create(filepath.Join(proxy.DataDir, "channels.json"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -254,5 +257,5 @@ func (proxy *Proxy) scan() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Wrote new channels.json")
+	log.Printf("Wrote new %s\n", filepath.Join(proxy.DataDir, "channels.json"))
 }
