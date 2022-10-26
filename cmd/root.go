@@ -37,7 +37,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&hostname, "hostname", "127.0.0.1", "IP address of the proxy")
+	rootCmd.PersistentFlags().StringVar(&hostname, "hostname", "127.0.0.1", "IP address of this proxy")
 	rootCmd.PersistentFlags().StringVarP(&port, "port", "p", "8000", "Frontend proxy listen port")
 	rootCmd.PersistentFlags().StringVar(&tunerPort, "tunerPort", "6000", "Backend proxy listen port")
 	rootCmd.PersistentFlags().StringVarP(&dataDir, "dataDir", "d", ".", "Data directory")
