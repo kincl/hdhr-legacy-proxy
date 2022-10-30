@@ -1,16 +1,12 @@
 package proxy
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -103,26 +99,8 @@ func (proxy *Proxy) index(w http.ResponseWriter, r *http.Request, ps httprouter.
 	w.Write([]byte("TODO Work in Progress\n"))
 }
 
-// TODO fix this to separate out the stream from the http connection
 func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
-
-	tunerPort, _ := strconv.Atoi(proxy.TunerPort)
-	addr := net.UDPAddr{
-		Port: tunerPort,
-		IP:   net.ParseIP("0.0.0.0"),
-	}
-	conn, err := net.ListenUDP("udp", &addr)
-	deadline := time.Now().Add(5 * time.Second)
-	conn.SetReadDeadline(deadline)
-	if err != nil {
-		log.Println("Error listening:", err.Error())
-		http.Error(w, "Unable to allocate port", http.StatusFailedDependency)
-		return
-	}
-	defer conn.Close()
-	rconn := bufio.NewReader(conn)
-	log.Printf("Connection opened, listening on UDP :%s\n", proxy.TunerPort)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -130,23 +108,25 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	err = proxy.device.SetChannel(ps.ByName("channel"), ps.ByName("program"), fmt.Sprintf("%s:%s", proxy.Hostname, proxy.TunerPort))
+	stream, err := proxy.device.GetStream(ps.ByName("channel"), ps.ByName("program"), fmt.Sprintf("%s:%s", proxy.Hostname, proxy.TunerPort))
 	if err != nil {
-		log.Printf("error setting channel: %v", err)
+		log.Printf("error getting stream: %v", err)
+		return
 	}
 
 	for {
 		select {
 		case <-r.Context().Done():
-			log.Printf("Connection closed, releasing UDP :%s\n", proxy.TunerPort)
+			// log.Printf("Connection closed, releasing UDP :%s\n", proxy.TunerPort)
+			stream.Close()
 			return
 		default:
-			_, err := io.CopyN(w, rconn, 1500)
+			io.Copy(w, stream)
+
 			if err != nil {
 				log.Println("error reading from UDP:", err.Error())
 				return
 			}
-			conn.SetReadDeadline(time.Time{})
 			flusher.Flush() // Trigger "chunked" encoding and send a chunk
 		}
 	}

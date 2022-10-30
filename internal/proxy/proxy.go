@@ -31,7 +31,7 @@ func NewProxy(hostname, port, tunerPort, dataDir string) *Proxy {
 	}
 
 	proxy.device = device.Device{}
-	proxy.device.FindDevices()
+	proxy.device.FindDevices(tunerPort)
 
 	err := proxy.loadDB()
 	if errors.Is(err, os.ErrNotExist) {
