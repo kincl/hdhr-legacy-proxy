@@ -7,12 +7,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/kincl/hdhr-legacy-proxy/internal/device"
 )
 
 type Proxy struct {
-	device device.Device
+	devices []device.Device
 
 	Hostname  string
 	Port      string
@@ -30,8 +31,9 @@ func NewProxy(hostname, port, tunerPort, dataDir string) *Proxy {
 		DataDir:   dataDir,
 	}
 
-	proxy.device = device.Device{}
-	proxy.device.FindDevices(tunerPort)
+	tunerPortInt, _ := strconv.Atoi(tunerPort)
+
+	proxy.devices = device.FindDevices(tunerPortInt)
 
 	err := proxy.loadDB()
 	if errors.Is(err, os.ErrNotExist) {
@@ -45,7 +47,7 @@ func NewProxy(hostname, port, tunerPort, dataDir string) *Proxy {
 }
 
 func (proxy *Proxy) ScanAndSaveDB() {
-	channels, err := proxy.device.Scan()
+	channels, err := proxy.devices[0].Scan()
 	if err != nil {
 		log.Fatalf("error scanning for channels: %v", err)
 	}

@@ -2,13 +2,18 @@ package proxy
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
+
+	"github.com/kincl/hdhr-legacy-proxy/internal/device"
+	"github.com/kincl/hdhr-legacy-proxy/web"
 )
 
 type Listing struct {
@@ -44,7 +49,7 @@ func (proxy *Proxy) discover(w http.ResponseWriter, r *http.Request, ps httprout
 		FriendlyName:    "hdhrLegacyProxy",
 		ModelNumber:     "HDTC-2US",
 		FirmwareName:    "hdhomeruntc_atsc",
-		TunerCount:      1,
+		TunerCount:      len(proxy.devices),
 		FirmwareVersion: "20150826",
 		DeviceID:        "12345678",
 		DeviceAuth:      "test1234",
@@ -95,11 +100,59 @@ func (proxy *Proxy) httpScan(w http.ResponseWriter, r *http.Request, ps httprout
 	w.Write([]byte("Scan initiated\n"))
 }
 
+type Device struct {
+	Name    string
+	Model   string
+	Address string
+}
+
+type Tuner struct {
+	InUse   bool
+	Channel string
+	Program string
+}
+
+type Page struct {
+	Device   Device
+	Channels []device.ChannelScan
+	Tuners   []Tuner
+}
+
 func (proxy *Proxy) index(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	w.Write([]byte("TODO Work in Progress\n"))
+	T, err := template.ParseFS(web.Content, "index.html")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	tuners := []Tuner{}
+	for i := 0; i < len(proxy.devices); i++ {
+		t := Tuner{
+			InUse:   proxy.devices[i].InUse,
+			Channel: proxy.devices[i].Channel,
+			Program: proxy.devices[i].Program,
+		}
+		tuners = append(tuners, t)
+	}
+
+	page := Page{
+		Channels: proxy.channels,
+		Device: Device{
+			Name:    proxy.devices[0].Name,
+			Model:   proxy.devices[0].Model,
+			Address: proxy.devices[0].Address,
+		},
+		Tuners: tuners,
+	}
+
+	err = T.Execute(w, page)
+	if err != nil {
+		fmt.Printf("error executing template: %v\n", err)
+	}
 }
 
 func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var stream *io.PipeReader
+	var err error
 	log.Printf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 
 	flusher, ok := w.(http.Flusher)
@@ -108,9 +161,15 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	stream, err := proxy.device.GetStream(ps.ByName("channel"), ps.ByName("program"), fmt.Sprintf("%s:%s", proxy.Hostname, proxy.TunerPort))
-	if err != nil {
-		log.Printf("error getting stream: %v", err)
+	for i := 0; i < len(proxy.devices); i++ {
+		stream, err = proxy.devices[0].GetStream(ps.ByName("channel"), ps.ByName("program"), fmt.Sprintf("%s:%s", proxy.Hostname, proxy.TunerPort))
+		if err != nil && !errors.Is(err, errors.New("device in use")) {
+			log.Printf("stream error: %v", err)
+		}
+	}
+
+	if stream == nil {
+		log.Printf("unable to stream: %v", err)
 		return
 	}
 

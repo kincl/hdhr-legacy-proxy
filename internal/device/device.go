@@ -3,11 +3,13 @@ package device
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
 	"time"
 	"unsafe"
@@ -26,13 +28,17 @@ type Device struct {
 
 	id int
 
-	inUse   bool
 	clients []*io.PipeWriter
 
-	channel string
-	program string
+	InUse   bool
+	Channel string
+	Program string
 
-	port string
+	port int
+
+	Name    string
+	Model   string
+	Address string
 }
 
 type ProgramScan struct {
@@ -47,7 +53,49 @@ type ChannelScan struct {
 	Programs    []ProgramScan `json:"programs"`
 }
 
-func (device *Device) FindDevices(tunerPort string) {
+type DiscoverJson struct {
+	FriendlyName    string
+	ModelNumber     string
+	FirmwareName    string
+	FirmwareVersion string
+	DeviceID        string
+	BaseURL         string
+}
+
+func GetDiscoverJson(baseUrl string) DiscoverJson {
+	cli := http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/discover.json", baseUrl), nil)
+	if err != nil {
+		log.Printf("error making request to discover endpoint: %v\n", err)
+	}
+
+	res, err := cli.Do(req)
+	if err != nil {
+		log.Printf("error making request to discover endpoint: %v\n", err)
+	}
+
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Printf("error reading discover endpoint: %v\n", err)
+	}
+
+	discover := DiscoverJson{}
+	err = json.Unmarshal(body, &discover)
+	if err != nil {
+		log.Printf("error marshalling discover endpoint: %v\n", err)
+	}
+
+	return discover
+}
+
+func FindDevices(tunerPort int) []Device {
 	wildcard, _ := strconv.ParseInt("0xFFFFFFFF", 0, 64)
 	ptr := C.malloc(C.sizeof_struct_hdhomerun_discover_device_t)
 	defer C.free(unsafe.Pointer(ptr))
@@ -73,9 +121,24 @@ func (device *Device) FindDevices(tunerPort string) {
 		time.Sleep(time.Second * 1)
 	}
 
-	log.Printf("Found %d HDHR device: %X %s\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)))
-	device.hdhrDevice = C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
-	device.port = tunerPort
+	log.Printf("Found %d HDHR device: %X %s (tuners: %d)\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)), discovered.tuner_count)
+
+	baseUrl := C.GoString(&discovered.base_url[0])
+	discoverJson := GetDiscoverJson(baseUrl)
+
+	devices := []Device{}
+	for i := 0; i < int(discovered.tuner_count); i++ {
+		device := Device{}
+		device.hdhrDevice = C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
+		device.port = tunerPort + 1
+		device.Name = discoverJson.FriendlyName
+		device.Model = discoverJson.ModelNumber
+		device.Address = discoverJson.BaseURL
+
+		devices = append(devices, device)
+	}
+
+	return devices
 }
 
 func (device *Device) SetChannel(channel string, program string, target string) error {
@@ -152,8 +215,8 @@ func (device *Device) Scan() ([]ChannelScan, error) {
 }
 
 func (device *Device) GetStream(channel string, program string, target string) (*io.PipeReader, error) {
-	if device.inUse {
-		if channel == device.channel && program == device.program {
+	if device.InUse {
+		if channel == device.Channel && program == device.Program {
 			r, w := io.Pipe()
 			device.clients = append(device.clients, w)
 			log.Printf("Adding client to stream %s/%s [clients: %d]\n", channel, program, len(device.clients))
@@ -162,9 +225,9 @@ func (device *Device) GetStream(channel string, program string, target string) (
 		return nil, errors.New("device in use")
 	}
 
-	device.inUse = true
-	device.channel = channel
-	device.program = program
+	device.InUse = true
+	device.Channel = channel
+	device.Program = program
 
 	r, w := io.Pipe()
 	device.clients = append(device.clients, w)
@@ -183,9 +246,8 @@ func (device *Device) streamThread() {
 	// allocate and listen on port
 	// set channel/program/target
 	// for loop copying bytes from udp to all channels
-	tunerPort, _ := strconv.Atoi(device.port)
 	addr := net.UDPAddr{
-		Port: tunerPort,
+		Port: device.port,
 		IP:   net.ParseIP("0.0.0.0"),
 	}
 	conn, err := net.ListenUDP("udp", &addr)
@@ -197,10 +259,10 @@ func (device *Device) streamThread() {
 	}
 	defer func() {
 		conn.Close()
-		device.inUse = false
+		device.InUse = false
 	}()
 	rconn := bufio.NewReader(conn)
-	log.Printf("Stream thread started, listening on UDP :%s\n", device.port)
+	log.Printf("Stream thread started, listening on UDP :%d\n", device.port)
 
 	buffer := make([]byte, 1500)
 

@@ -11,7 +11,7 @@ COPY . /hdhr-legacy-proxy
 WORKDIR /hdhr-legacy-proxy
 
 COPY --from=libbuild /tmp/libhdhomerun /hdhr-legacy-proxy/libhdhomerun
-RUN go build -o hdhr-legacy-proxy main.go
+RUN go build -o hdhr-legacy-proxy cmd/root.go
 
 FROM docker.io/redhat/ubi8-minimal:latest
 
