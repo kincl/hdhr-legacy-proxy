@@ -19,6 +19,10 @@ Environment Options
 | HDHR_LEGACY_PROXY_PORT | Port the proxy listens on for connections from Plex | 8000 |
 | HDHR_LEGACY_PROXY_TUNER_PORT | UDP port the proxy listens on for connections from the HDHR tuner | 6000 |
 
+### Web interface
+
+There is a web interface on the proxy port (default 8000)
+
 ### Channel Scan
 
 Access `http://${HDHR_LEGACY_PROXY_HOST}:${HDHR_LEGACY_PROXY_PORT}/scan` to do a channel scan and put the results in memory

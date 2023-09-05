@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -126,6 +127,21 @@ type Page struct {
 	Tuners   []Tuner
 }
 
+func (proxy *Proxy) lookupChannel(channel, program string) (string, string) {
+	channelint, _ := strconv.Atoi(channel)
+	programint, _ := strconv.Atoi(channel)
+	for i := 0; i < len(proxy.channels); i++ {
+		if channelint == proxy.channels[i].Frequency {
+			for j := 0; j < len(proxy.channels[i].Programs); j++ {
+				if programint == proxy.channels[i].Programs[j].Program_number {
+					return proxy.channels[i].Channel_str, proxy.channels[i].Programs[j].Program_str
+				}
+			}
+		}
+	}
+	return channel, program
+}
+
 func (proxy *Proxy) index(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	T, err := template.ParseFS(web.Content, "index.html")
 	if err != nil {
@@ -134,10 +150,11 @@ func (proxy *Proxy) index(w http.ResponseWriter, r *http.Request, ps httprouter.
 
 	tuners := []Tuner{}
 	for i := 0; i < len(proxy.devices); i++ {
+		c, p := proxy.lookupChannel(proxy.devices[i].Channel, proxy.devices[i].Program)
 		t := Tuner{
 			InUse:   proxy.devices[i].InUse,
-			Channel: proxy.devices[i].Channel,
-			Program: proxy.devices[i].Program,
+			Channel: c,
+			Program: p,
 		}
 		tuners = append(tuners, t)
 	}
