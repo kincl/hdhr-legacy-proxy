@@ -121,7 +121,11 @@ func FindDevices(tunerPort int) []Device {
 		time.Sleep(time.Second * 1)
 	}
 
-	log.Printf("Found %d HDHR device: %X %s (tuners: %d)\n", numFound, discovered.device_id, inet_ntoa((uint32)(discovered.ip_addr)), discovered.tuner_count)
+	log.Printf("Found %d HDHR device: %X %s (tuners: %d)\n",
+		numFound,
+		discovered.device_id,
+		inet_ntoa((uint32)(discovered.ip_addr)),
+		discovered.tuner_count)
 
 	baseUrl := C.GoString(&discovered.base_url[0])
 	discoverJson := GetDiscoverJson(baseUrl)
