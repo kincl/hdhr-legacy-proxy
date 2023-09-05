@@ -129,7 +129,7 @@ func FindDevices(tunerPort int) []Device {
 	devices := []Device{}
 	for i := 0; i < int(discovered.tuner_count); i++ {
 		device := Device{}
-		device.hdhrDevice = C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(0), nil)
+		device.hdhrDevice = C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(i), nil)
 		device.port = tunerPort + i
 		device.Name = discoverJson.FriendlyName
 		device.Model = discoverJson.ModelNumber
