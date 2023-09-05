@@ -30,8 +30,16 @@ func (proxy *Proxy) GetRouter() *httprouter.Router {
 	router.GET("/lineup.json", proxy.lineup)
 	router.GET("/auto/:channel/:program", proxy.stream)
 	router.GET("/scan", proxy.httpScan)
+	router.NotFound = notFoundHandler{}
 
 	return router
+}
+
+type notFoundHandler struct {
+}
+
+func (h notFoundHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Not Found: %s %s %s\n", r.RemoteAddr, r.Method, r.URL)
 }
 
 func (proxy *Proxy) discover(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
