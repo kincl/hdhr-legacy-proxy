@@ -119,6 +119,7 @@ type Tuner struct {
 	InUse   bool
 	Channel string
 	Program string
+	Clients int
 }
 
 type Page struct {
@@ -155,6 +156,7 @@ func (proxy *Proxy) index(w http.ResponseWriter, r *http.Request, ps httprouter.
 			InUse:   proxy.devices[i].InUse,
 			Channel: c,
 			Program: p,
+			Clients: len(proxy.devices[i].Clients),
 		}
 		tuners = append(tuners, t)
 	}

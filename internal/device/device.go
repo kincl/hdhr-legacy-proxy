@@ -28,7 +28,7 @@ type Device struct {
 
 	id int
 
-	clients []*io.PipeWriter
+	Clients []*io.PipeWriter
 
 	InUse   bool
 	Channel string
@@ -222,8 +222,8 @@ func (device *Device) GetStream(channel string, program string, target string) (
 	if device.InUse {
 		if channel == device.Channel && program == device.Program {
 			r, w := io.Pipe()
-			device.clients = append(device.clients, w)
-			log.Printf("Adding client to stream %s/%s [clients: %d]\n", channel, program, len(device.clients))
+			device.Clients = append(device.Clients, w)
+			log.Printf("Adding client to stream %s/%s [clients: %d]\n", channel, program, len(device.Clients))
 			return r, nil
 		}
 		return nil, errors.New("device in use")
@@ -234,7 +234,7 @@ func (device *Device) GetStream(channel string, program string, target string) (
 	device.Program = program
 
 	r, w := io.Pipe()
-	device.clients = append(device.clients, w)
+	device.Clients = append(device.Clients, w)
 
 	go device.streamThread()
 
@@ -271,7 +271,7 @@ func (device *Device) streamThread() {
 	buffer := make([]byte, 1500)
 
 	for {
-		if len(device.clients) == 0 {
+		if len(device.Clients) == 0 {
 			log.Println("No more stream clients, stopping stream")
 			return
 		}
@@ -283,12 +283,12 @@ func (device *Device) streamThread() {
 		}
 		conn.SetReadDeadline(time.Time{})
 
-		for i := 0; i < len(device.clients); i++ {
+		for i := 0; i < len(device.Clients); i++ {
 			r := bytes.NewReader(buffer)
-			_, err := io.Copy(device.clients[i], r)
+			_, err := io.Copy(device.Clients[i], r)
 			if err != nil && errors.Is(err, io.ErrClosedPipe) {
-				device.clients = append(device.clients[:i], device.clients[i+1:]...)
-				log.Printf("Client closed connection [clients: %d]\n", len(device.clients))
+				device.Clients = append(device.Clients[:i], device.Clients[i+1:]...)
+				log.Printf("Client closed connection [clients: %d]\n", len(device.Clients))
 			}
 		}
 	}
