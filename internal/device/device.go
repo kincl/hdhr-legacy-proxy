@@ -34,7 +34,7 @@ type Device struct {
 	Channel string
 	Program string
 
-	port int
+	Port int
 
 	Name    string
 	Model   string
@@ -134,7 +134,7 @@ func FindDevices(tunerPort int) []Device {
 	for i := 0; i < int(discovered.tuner_count); i++ {
 		device := Device{}
 		device.hdhrDevice = C.hdhomerun_device_create(discovered.device_id, discovered.ip_addr, C.uint(i), nil)
-		device.port = tunerPort + i
+		device.Port = tunerPort + i
 		device.Name = discoverJson.FriendlyName
 		device.Model = discoverJson.ModelNumber
 		device.Address = discoverJson.BaseURL
@@ -251,7 +251,7 @@ func (device *Device) streamThread() {
 	// set channel/program/target
 	// for loop copying bytes from udp to all channels
 	addr := net.UDPAddr{
-		Port: device.port,
+		Port: device.Port,
 		IP:   net.ParseIP("0.0.0.0"),
 	}
 	conn, err := net.ListenUDP("udp", &addr)
@@ -266,7 +266,7 @@ func (device *Device) streamThread() {
 		device.InUse = false
 	}()
 	rconn := bufio.NewReader(conn)
-	log.Printf("Stream thread started, listening on UDP :%d\n", device.port)
+	log.Printf("Stream thread started, listening on UDP :%d\n", device.Port)
 
 	buffer := make([]byte, 1500)
 
