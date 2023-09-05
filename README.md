@@ -3,7 +3,7 @@
 This is a proxy that will make a HDHR legacy (HDHR Dual, HDHR 3) act like a newer version
 in order to work with Plex Media Center
 
-![diagram](design-docs/hdhr-legacy-proxy.jpg)
+![diagram](doc/hdhr-legacy-proxy.jpg)
 
 ## Use
 
