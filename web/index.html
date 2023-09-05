@@ -79,7 +79,7 @@
               {{ range $i, $a := .Tuners }}
                 <div class="list-group-item my-3">
                   <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">Tuner {{ $i }}</h6>
+                    <h6 class="mb-1">Tuner {{ $i }} (Clients: {{ $a.Clients }})</h6>
                     <small>In Use: {{ $a.InUse }}</small>
                   </div>
                   {{ if $a.InUse }}
