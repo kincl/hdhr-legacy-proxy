@@ -172,6 +172,9 @@ func (proxy *Proxy) stream(w http.ResponseWriter, r *http.Request, ps httprouter
 	for i := 0; i < len(proxy.devices); i++ {
 		log.Printf("trying to stream from tuner %d\n", i)
 		stream, err = proxy.devices[i].GetStream(ps.ByName("channel"), ps.ByName("program"), fmt.Sprintf("%s:%s", proxy.Hostname, proxy.TunerPort))
+		if err == nil {
+			break
+		}
 		if err != nil && !errors.Is(err, errors.New("device in use")) {
 			log.Printf("stream error: %v", err)
 		}
