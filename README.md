@@ -31,9 +31,5 @@ Manually specify the tuner in the settings as `${HDHR_LEGACY_PROXY_HOST}:${HDHR_
 
 - Default to using own IP for proxy host variable
 - Option for manually specifying device and not doing autodiscovery
-- Implement multiple tuners with a pool of resources
-  - https://github.com/jackc/puddle/blob/master/pool.go
-  - https://info.hdhomerun.com/info/http_api#specifying_a_tuner
 - Document how to use with Docker and Kubernetes
-- Set up default web page on proxy at / describing what is going on
 - Implement channel scan results storage
