@@ -31,19 +31,38 @@ func NewProxy(hostname, port, tunerPort, dataDir string) *Proxy {
 		DataDir:   dataDir,
 	}
 
-	tunerPortInt, _ := strconv.Atoi(tunerPort)
+	return proxy
+}
+
+func (proxy *Proxy) CreateDevices(tunerIPAddress string, tunerNum int) {
+	var err error
+	tunerPortInt, _ := strconv.Atoi(proxy.TunerPort)
+
+	proxy.devices, err = device.CreateDevices(tunerIPAddress, tunerPortInt, tunerNum)
+	if err != nil {
+		log.Fatalf("error creating devices: %v", err)
+	}
+
+	proxy.InitializeDB()
+}
+
+func (proxy *Proxy) DiscoverDevices() {
+	tunerPortInt, _ := strconv.Atoi(proxy.TunerPort)
 
 	proxy.devices = device.FindDevices(tunerPortInt)
 
+	proxy.InitializeDB()
+}
+
+func (proxy *Proxy) InitializeDB() {
 	err := proxy.loadDB()
+
 	if errors.Is(err, os.ErrNotExist) {
 		log.Printf("No %s found, doing channel scan\n", filepath.Join(proxy.DataDir, "channels.json"))
 		proxy.ScanAndSaveDB()
 	} else if err != nil {
 		log.Printf("error loading database: %v", err)
 	}
-
-	return proxy
 }
 
 func (proxy *Proxy) ScanAndSaveDB() {

@@ -145,6 +145,32 @@ func FindDevices(tunerPort int) []Device {
 	return devices
 }
 
+func CreateDevices(ipAddress string, tunerPort int, numTuners int) ([]Device, error) {
+	devices := []Device{}
+	for i := 0; i < numTuners; i++ {
+		device := Device{}
+
+		charIPAddress := C.CString(ipAddress)
+		device.hdhrDevice = C.hdhomerun_device_create_from_str(charIPAddress, nil)
+		defer C.free(unsafe.Pointer(charIPAddress))
+
+		intTunerNum := C.uint(i)
+		tuner_ok := C.hdhomerun_device_set_tuner(device.hdhrDevice, intTunerNum)
+		if tuner_ok != 1 {
+			return nil, errors.New("unable to set tuner for device")
+		}
+
+		device.Port = tunerPort + i
+		device.Name = ""
+		device.Model = ""
+		device.Address = ""
+
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
 func (device *Device) SetChannel(channel string, program string, target string) error {
 	tunerChannel := C.CString(fmt.Sprintf("auto:%s", channel))
 	channel_ok := C.hdhomerun_device_set_tuner_channel(device.hdhrDevice, tunerChannel)
